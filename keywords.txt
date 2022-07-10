@@ -1,0 +1,24 @@
+########################################
+# Syntax Coloring Map NotecardAuxiliaryWiFi
+########################################
+
+########################################
+# Datatypes (KEYWORD1)
+########################################
+
+########################################
+# Methods and Functions (KEYWORD2)
+########################################
+begin				KEYWORD2
+end					KEYWORD2
+logCachedSsids		KEYWORD2
+updateTriangulationData	KEYWORD2
+
+########################################
+# Structures (KEYWORD3)
+########################################
+NotecardAuxiliaryWiFi	KEYWORD3
+
+########################################
+# Constants (LITERAL1)
+########################################

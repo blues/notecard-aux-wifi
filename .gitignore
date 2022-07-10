@@ -1,0 +1,6 @@
+.vscode/
+
+a.out
+auxiliary_wifi_tests
+
+*.gc*
