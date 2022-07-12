@@ -46,6 +46,8 @@ int
 NotecardAuxiliaryWiFi::begin (
     void
 ) {
+    int err;
+
     if (!_library_initialized) {
         //TODO: Capture previous configuration of Notecard
 
@@ -55,34 +57,53 @@ NotecardAuxiliaryWiFi::begin (
             JAddStringToObject(req, "mode", "wifi");
             JAddBoolToObject(req, "on", true);
             JAddBoolToObject(req, "set", true);
-            _notecard.sendRequest(req);
-        }
-
-        //TODO: Capture previous configuration of ESP32
-
-        // Go into station mode to enable scanning
-        WiFi.mode(WIFI_STA);
-
-        // Disconnect ESP32 from any/all access points
-        if (WiFi.disconnect()) {
-            // Block until disconnection completed
-            const size_t begin_disconnect_ms = ::millis();
-            bool timeout_occured = false;
-            while (WiFi.isConnected() && !(timeout_occured = (::millis() >= (begin_disconnect_ms + WIFI_DISCONNECT_TIMEOUT_MS))));
-            _library_initialized = !timeout_occured;
+            J *rsp = _notecard.requestAndResponse(req);
+            if (NoteResponseError(rsp)) {
+                err = -2;
+                _notecard.logDebugf("[ERROR][Wi-Fi] %s\r\n", JGetString(rsp, "err"));
+            } else {
+                err = 0;
+            }
+            NoteDeleteResponse(rsp);
         } else {
-            _library_initialized = false;
+            err = -1;
+            _notecard.logDebug("[ERROR][Wi-Fi] No memory available for new Note!\r\n");
         }
+
+        if (!err) {
+            //TODO: Capture previous configuration of ESP32
+
+            // Go into station mode to enable scanning
+            WiFi.mode(WIFI_STA);
+
+            // Disconnect ESP32 from any/all access points
+            if (WiFi.disconnect()) {
+                // Block until disconnection completed
+                const size_t begin_disconnect_ms = ::millis();
+                bool timeout_occured = false;
+                while (WiFi.isConnected() && !(timeout_occured = (::millis() >= (begin_disconnect_ms + WIFI_DISCONNECT_TIMEOUT_MS))));
+                if (timeout_occured) {
+                    err = -3;
+                    _notecard.logDebug("[ERROR][Wi-Fi] Timeout while scanning for Wi-Fi!\r\n");
+                }
+            } else {
+                err = 0;
+                _notecard.logDebug("[INFO ][Wi-Fi] Library already initialized prior to `begin()`\r\n");
+            }
+        }
+    } else {
+        err = 0;
     }
 
-    return !_library_initialized;
+    _library_initialized = !err;
+    return err;
 }
 
 bool
 NotecardAuxiliaryWiFi::cacheIsValid (
     void
 ) {
-    bool result;
+    bool valid;
 
     // Determine whether or not the module has moved since the last time we scanned wifi.
     J *rsp = _notecard.requestAndResponse(_notecard.newRequest("card.triangulate"));
@@ -93,18 +114,18 @@ NotecardAuxiliaryWiFi::cacheIsValid (
         if (wifiTextLength > 1 && wifiScanTimeSecs != 0 && movementTimeSecs != 0 && wifiScanTimeSecs > movementTimeSecs) {
             // Triangulation has been performed since last
             // movement and a cached location exists.
-            result = true;  // cache is valid
+            valid = true;
         } else {
             // Movement detected since last triangulation
-            result = false;  // cache is invalid
+            valid = false;
         }
         NoteDeleteResponse(rsp);
     } else {
         // ERROR CONDITION
-        result = false;  // invalidate cache as a precaution
+        valid = false;  // invalidate cache as a precaution
     }
 
-    return result;
+    return valid;
 }
 
 void
@@ -120,7 +141,7 @@ NotecardAuxiliaryWiFi::enqueueResults (
     const char * ssid_buffer_,
     bool clear_location_on_empty_scan_
 ) {
-    int result;
+    int err;
 
     if (_ap_count || clear_location_on_empty_scan_) {
         J *req = _notecard.newRequest("card.triangulate");
@@ -130,11 +151,23 @@ NotecardAuxiliaryWiFi::enqueueResults (
             } else {
                 JAddStringToObject(req, "text", "-");
             }
-            _notecard.sendRequest(req);
+            J *rsp = _notecard.requestAndResponse(req);
+            if (NoteResponseError(rsp)) {
+                err = -2;
+                _notecard.logDebugf("[ERROR][Wi-Fi] %s\r\n", JGetString(rsp, "err"));
+            } else {
+                err = 0;  // Notecard location data updated accordingly
+            }
+            NoteDeleteResponse(rsp);
+        } else {
+            err = -1;
+            _notecard.logDebug("[ERROR][Wi-Fi] No memory available for new Note!\r\n");
         }
+    } else {
+        err = 0;  // No SSIDs were provided and no action was taken
     }
 
-    return 0;
+    return err;
 }
 
 template<typename fn>
@@ -177,7 +210,7 @@ NotecardAuxiliaryWiFi::updateTriangulationData (
     bool clear_location_on_empty_scan_,
     bool use_cache_
 ) {
-    int result;
+    int err;
 
     // Scan networks (if necessary)
     if (!use_cache_ || !cacheIsValid()) {
@@ -186,14 +219,14 @@ NotecardAuxiliaryWiFi::updateTriangulationData (
         // Initiate network scan
         int ap_count = WiFi.scanNetworks();
         if (ap_count < 0) {
-            _notecard.logDebugf("[ERROR][Wi-Fi] AP scan failed!\r\n");
+            _notecard.logDebug("[ERROR][Wi-Fi] AP scan failed!\r\n");
             _ap_count = 0;
             _last_scan_ms = 0;
-            result = -1;
+            err = -1;
         } else {
             _ap_count = ap_count;
             _notecard.logDebugf("[INFO ][Wi-Fi] <%d> access points found.\r\n", _ap_count);
-            result = 0;
+            err = 0;
         }
     }
 
@@ -203,7 +236,7 @@ NotecardAuxiliaryWiFi::updateTriangulationData (
     scan_stream << "\r\n";
 
     // Enqueue triangulation information
-    enqueueResults(scan_stream.str().c_str(), clear_location_on_empty_scan_);
+    err = enqueueResults(scan_stream.str().c_str(), clear_location_on_empty_scan_);
 
-    return result;
+    return err;
 }

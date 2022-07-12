@@ -14,6 +14,10 @@
  * This example is designed to demonstrate the capability and usage of the
  * NotecardAuxiliaryWiFi library in the fewest lines of code (quick).
  *
+ * Review "Using Cell Tower & Wi-Fi Triangulation", on the Notecard developer
+ * site, to understand how to properly configure and utilize this feature.
+ * /notecard/notecard-walkthrough/time-and-location-requests/#using-cell-tower-and-wi-fi-triangulation
+ *
  * NOTE: This sample is ONLY intended to compile on the ESP32 architecture.
  * Any Notecard/Notecarrier combination can be used, but the sample was created
  * and tested using the Notecarrier-F kit.
@@ -50,12 +54,14 @@ void setup() {
   // Initialize Auxiliary Wi-Fi
   aux_wifi.begin();
 
-  // Connect Notecard to your Notehub account
+  // Associate the Notecard with your Notehub account
+  // _**NOTE:** Wi-Fi location data is only updated with each newly established
+  // session with Notehub.io. Therefore, "minimal mode" has been selected,
+  // because a new session is established with each manual sync._
   J *cmd = notecard.newCommand("hub.set");
   JAddStringToObject(cmd, "product", productUID);
-  JAddStringToObject(cmd, "mode", "continuous");
+  JAddStringToObject(cmd, "mode", "minimum");
   notecard.sendRequest(cmd);
-
 }
 
 void loop() {
@@ -70,6 +76,6 @@ void loop() {
   // Notecard, on to Notehub.io for final geolocation processing
   notecard.sendRequest(notecard.newCommand("hub.sync"));
 
-  // Wait 15s between loops
-  ::delay(15000);
+  // Wait three (3) minutes between loops
+  ::delay(180000);
 }
